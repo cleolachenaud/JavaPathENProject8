@@ -8,6 +8,7 @@ import com.openclassrooms.tourguide.user.UserReward;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +16,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -87,23 +90,67 @@ public class TourGuideService {
 		user.setTripDeals(providers);
 		return providers;
 	}
-
+	
 	public VisitedLocation trackUserLocation(User user) {
-		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
-		user.addToVisitedLocations(visitedLocation);
-		rewardsService.calculateRewards(user);
-		return visitedLocation;
+	    try {
+	        // Appel à la méthode asynchrone et attente du résultat
+	        return trackUserLocationAsync(user).get();
+	    } catch (InterruptedException e) {
+	        // Restauration de l'état d'interruption du thread
+	        Thread.currentThread().interrupt();
+	        // Vous pouvez logger l'erreur ici
+	        throw new RuntimeException("Le thread a été interrompu lors du tracking de l'utilisateur", e);
+	    } catch (ExecutionException e) {
+	        // Gestion de l'exception qui a causé l'échec de l'exécution asynchrone
+	        Throwable cause = e.getCause();
+	        // Vous pouvez logger le détail de la cause ici
+	        throw new RuntimeException("Erreur lors du tracking de l'utilisateur", cause);
+	    }
 	}
-
+	
+	
+	public CompletableFuture<VisitedLocation> trackUserLocationAsync(User user) {
+	    /*return CompletableFuture.supplyAsync(() -> {
+	    	// utilisation d'un COmpletableFutur pour lancer le traitement en asynchrone
+	        VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
+	        user.addToVisitedLocations(visitedLocation);
+	        rewardsService.calculateRewards(user);
+	        for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
+	            System.out.println(ste);
+	        }
+	        return visitedLocation;
+	    });
+	    */
+	    	// utilisation d'un COmpletableFutur pour lancer le traitement en asynchrone
+			Long debut = System.currentTimeMillis();//CLA
+	        VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
+	        System.out.println("getUserLocation 1 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
+	        debut = System.currentTimeMillis();//CLA
+	        user.addToVisitedLocations(visitedLocation);
+	        System.out.println("addToVisitedLocation 2 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
+	        debut = System.currentTimeMillis();//CLA
+	        rewardsService.calculateRewards(user);
+	        System.out.println("calculatereward 3 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
+	        return CompletableFuture.supplyAsync(() -> { return visitedLocation;
+	    });
+	}
 	public List<Attraction> getNearByAttractions(VisitedLocation visitedLocation) {
-		List<Attraction> nearbyAttractions = new ArrayList<>();
-		for (Attraction attraction : gpsUtil.getAttractions()) {
-			if (rewardsService.isWithinAttractionProximity(attraction, visitedLocation.location)) {
-				nearbyAttractions.add(attraction);
-			}
-		}
+	    List<Attraction> originalList = gpsUtil.getAttractions();
+	    // Copie locale pour éviter les effets de bord liés au multi-threading
+	    List<Attraction> copieAttractions = new ArrayList<>(originalList);
+        // on crée un comparateur pour comparer les attractions et ainsi pouvoir les trier 
+	    Comparator<Attraction> distanceComparator =
+	            (a1, a2) -> Double.compare(rewardsService.getDistance(a1, visitedLocation.location), 
+	            		rewardsService.getDistance(a2, visitedLocation.location));
+	            // double est privilégié a int pour éviter les erreurs d'arrondi
 
-		return nearbyAttractions;
+	    // on remplie la liste des 5 attractions les plus proches de l'utilisateur 
+	    List<Attraction> nearbyAttractions = copieAttractions.stream()
+	    	    .sorted(distanceComparator) // on trie la liste du plus proche au plus lointain
+	    	    .limit(5) // dans la limite de 5 attractions
+	    	    .collect(Collectors.toList()); // qu'on insère dans la liste
+
+	    return nearbyAttractions;
 	}
 
 	private void addShutDownHook() {
@@ -113,7 +160,7 @@ public class TourGuideService {
 			}
 		});
 	}
-
+//TODO repasser ça dans des tests c'est pas possible 
 	/**********************************************************************************
 	 * 
 	 * Methods Below: For Internal Testing

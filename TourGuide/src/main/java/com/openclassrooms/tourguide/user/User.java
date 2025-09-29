@@ -4,6 +4,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.apache.commons.lang3.time.StopWatch;
+
+import com.openclassrooms.tourguide.service.RewardsService;
 
 import gpsUtil.location.VisitedLocation;
 import tripPricer.Provider;
@@ -14,8 +19,9 @@ public class User {
 	private String phoneNumber;
 	private String emailAddress;
 	private Date latestLocationTimestamp;
-	private List<VisitedLocation> visitedLocations = new ArrayList<>();
-	private List<UserReward> userRewards = new ArrayList<>();
+	// COpyOnWriteArrayList permet de gérer le traitement en parallèle de la liste en fonction des utilisateurs 
+	private List<VisitedLocation> visitedLocations = new CopyOnWriteArrayList<>();
+	private List<UserReward> userRewards = new CopyOnWriteArrayList<>(); 
 	private UserPreferences userPreferences = new UserPreferences();
 	private List<Provider> tripDeals = new ArrayList<>();
 	public User(UUID userId, String userName, String phoneNumber, String emailAddress) {
@@ -70,12 +76,13 @@ public class User {
 	}
 	
 	public void addUserReward(UserReward userReward) {
-		if(userRewards.stream().filter(r -> !r.attraction.attractionName.equals(userReward.attraction)).count() == 0) {
+		if(userRewards.stream().filter(r -> r.attraction.attractionName.equals(userReward.attraction.attractionName)).count() == 0) {
 			userRewards.add(userReward);
 		}
 	}
 	
 	public List<UserReward> getUserRewards() {
+		RewardsService.attendLaFinDuCalculReward(getUserId());
 		return userRewards;
 	}
 	
@@ -86,9 +93,13 @@ public class User {
 	public void setUserPreferences(UserPreferences userPreferences) {
 		this.userPreferences = userPreferences;
 	}
-
+//TODO a voir si cette méthode ne peut pas renvoyer une exception si la liste est vide
 	public VisitedLocation getLastVisitedLocation() {
+		if(visitedLocations.size()==0) {
+			return null;
+		}else {
 		return visitedLocations.get(visitedLocations.size() - 1);
+		}
 	}
 	
 	public void setTripDeals(List<Provider> tripDeals) {
