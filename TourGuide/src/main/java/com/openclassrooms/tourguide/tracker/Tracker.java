@@ -14,8 +14,9 @@ import com.openclassrooms.tourguide.user.User;
 
 public class Tracker extends Thread {
 	private Logger logger = LoggerFactory.getLogger(Tracker.class);
-	private static final long trackingPollingInterval = TimeUnit.MINUTES.toSeconds(5);
-	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	private static final long trackingPollingInterval = TimeUnit.MINUTES.toSeconds(21); //relance le thread toutes les 16 minutes. Globalement les utilisateurs sont mis à jours toute les 16 minutes
+	//private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()*50);
 	private final TourGuideService tourGuideService;
 	private boolean stop = false;
 
@@ -47,7 +48,7 @@ public class Tracker extends Thread {
 			// TODO réinitialiser le logger des lignes ci-dessous en DEBUG plutôt que WARN
 			logger.warn("Begin Tracker. Tracking " + users.size() + " users.");
 			stopWatch.start();
-			users.forEach(u -> tourGuideService.trackUserLocation(u));
+			users.forEach(u -> tourGuideService.getUserLocationAsync(u));
 			stopWatch.stop();
 			logger.warn("Tracker Time Elapsed: " + TimeUnit.MILLISECONDS.toSeconds(stopWatch.getTime()) + " seconds.");
 			stopWatch.reset();

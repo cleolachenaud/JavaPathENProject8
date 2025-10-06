@@ -4,6 +4,7 @@ import com.openclassrooms.tourguide.helper.InternalTestHelper;
 import com.openclassrooms.tourguide.tracker.Tracker;
 import com.openclassrooms.tourguide.user.User;
 import com.openclassrooms.tourguide.user.UserReward;
+import com.openclassrooms.tourguide.utils.FuturUtils;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -18,6 +19,9 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -35,13 +39,17 @@ import tripPricer.TripPricer;
 
 @Service
 public class TourGuideService {
-	private Logger logger = LoggerFactory.getLogger(TourGuideService.class);
+	private static Logger logger = LoggerFactory.getLogger(TourGuideService.class);
 	private final GpsUtil gpsUtil;
 	private final RewardsService rewardsService;
 	private final TripPricer tripPricer = new TripPricer();
 	public final Tracker tracker;
 	boolean testMode = true;
-
+	private final static Long TIME21 = TimeUnit.MINUTES.toMillis(21L); // pour demander le rafraichissement au bout de 21 minutes
+	private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()*50);
+	
+	
+	private static Map<UUID, FuturUtils> futurByUserId = new HashMap<>();
 	public TourGuideService(GpsUtil gpsUtil, RewardsService rewardsService) {
 		this.gpsUtil = gpsUtil;
 		this.rewardsService = rewardsService;
@@ -57,11 +65,16 @@ public class TourGuideService {
 		tracker = new Tracker(this);
 		addShutDownHook();
 	}
-
+/**
+ * retourne une liste des récompenses par utilisateur
+ * @param user
+ * @return
+ */
 	public List<UserReward> getUserRewards(User user) {
 		return user.getUserRewards();
 	}
 
+	
 	public VisitedLocation getUserLocation(User user) {
 		VisitedLocation visitedLocation = (user.getVisitedLocations().size() > 0) ? user.getLastVisitedLocation()
 				: trackUserLocation(user);
@@ -75,7 +88,10 @@ public class TourGuideService {
 	public List<User> getAllUsers() {
 		return internalUserMap.values().stream().collect(Collectors.toList());
 	}
-
+/**
+ * ajouter un User
+ * @param user
+ */
 	public void addUser(User user) {
 		if (!internalUserMap.containsKey(user.getUserName())) {
 			internalUserMap.put(user.getUserName(), user);
@@ -91,58 +107,50 @@ public class TourGuideService {
 		return providers;
 	}
 	
-	public VisitedLocation trackUserLocation(User user) {
-	    try {
-	        // Appel à la méthode asynchrone et attente du résultat
-	        return trackUserLocationAsync(user).get();
-	    } catch (InterruptedException e) {
-	        // Restauration de l'état d'interruption du thread
-	        Thread.currentThread().interrupt();
-	        // Vous pouvez logger l'erreur ici
-	        throw new RuntimeException("Le thread a été interrompu lors du tracking de l'utilisateur", e);
-	    } catch (ExecutionException e) {
-	        // Gestion de l'exception qui a causé l'échec de l'exécution asynchrone
-	        Throwable cause = e.getCause();
-	        // Vous pouvez logger le détail de la cause ici
-	        throw new RuntimeException("Erreur lors du tracking de l'utilisateur", cause);
-	    }
+
+	
+
+	private void trackUserLocationCore(User user) {
+        VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
+        user.addToVisitedLocations(visitedLocation);
+        rewardsService.calculateRewards(user);
 	}
 	
+	public void getUserLocationAsync(User user) {
+		CompletableFuture futur = CompletableFuture.runAsync(() -> trackUserLocationCore(user), executor);
+		FuturUtils futurUtils = new FuturUtils(futur);
+		futurByUserId.put(user.getUserId(), futurUtils); // je stock ici l'ID de mon user + l'heure à laquel le traitement est effectué ainsi que le traitement 
+	}
 	
-	public CompletableFuture<VisitedLocation> trackUserLocationAsync(User user) {
-	    /*return CompletableFuture.supplyAsync(() -> {
-	    	// utilisation d'un COmpletableFutur pour lancer le traitement en asynchrone
-	        VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
-	        user.addToVisitedLocations(visitedLocation);
-	        rewardsService.calculateRewards(user);
-	        for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-	            System.out.println(ste);
-	        }
-	        return visitedLocation;
-	    });
-	    */
-	    	// utilisation d'un COmpletableFutur pour lancer le traitement en asynchrone
-			Long debut = System.currentTimeMillis();//CLA
-	        VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
-	        System.out.println("getUserLocation 1 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
-	        debut = System.currentTimeMillis();//CLA
-	        user.addToVisitedLocations(visitedLocation);
-	        System.out.println("addToVisitedLocation 2 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
-	        debut = System.currentTimeMillis();//CLA
-	        rewardsService.calculateRewards(user);
-	        System.out.println("calculatereward 3 Temps écoulé (ms) : " + (System.currentTimeMillis() - debut));//CLA
-	        return CompletableFuture.supplyAsync(() -> { return visitedLocation;
-	    });
+	public VisitedLocation trackUserLocation(User user) {
+		attendLaFinDuCalculGetUserLocation(user);
+        return user.getLastVisitedLocation();
+}
+	private void attendLaFinDuCalculGetUserLocation(User user) {
+		FuturUtils futurUtils = futurByUserId.get(user.getUserId()); // je récupère le futur et le temps d'actualisation lié au user 
+		if(!(futurUtils != null && (Long) futurUtils.getTimeDebut()+TIME21 > System.currentTimeMillis())) {
+			// si je n'ai pas de traitement pour ce user OU que le traitement a été lancé il y a plus de 21 minutes
+			// je n'ai pas encore les informations, ou elles sont expirées, je lance mon calcul manuellement 
+			getUserLocationAsync(user);
+		}
+		// puis je récupère le futur terminé
+		try {
+			futurByUserId.get(user.getUserId()).getFutur().get();
+		} catch (InterruptedException | ExecutionException e) {
+			logger.debug("attendrefinGetUserLocation", e.toString());
+			e.printStackTrace();
+		}
+	
 	}
 	public List<Attraction> getNearByAttractions(VisitedLocation visitedLocation) {
 	    List<Attraction> originalList = gpsUtil.getAttractions();
 	    // Copie locale pour éviter les effets de bord liés au multi-threading
-	    List<Attraction> copieAttractions = new ArrayList<>(originalList);
+	    ArrayList<Attraction> copieAttractions = new ArrayList<>(originalList);
         // on crée un comparateur pour comparer les attractions et ainsi pouvoir les trier 
 	    Comparator<Attraction> distanceComparator =
 	            (a1, a2) -> Double.compare(rewardsService.getDistance(a1, visitedLocation.location), 
 	            		rewardsService.getDistance(a2, visitedLocation.location));
-	            // double est privilégié a int pour éviter les erreurs d'arrondi
+	            // double pour éviter les erreurs d'arrondi
 
 	    // on remplie la liste des 5 attractions les plus proches de l'utilisateur 
 	    List<Attraction> nearbyAttractions = copieAttractions.stream()
