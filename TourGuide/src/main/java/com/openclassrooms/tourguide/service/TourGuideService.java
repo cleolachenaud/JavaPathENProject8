@@ -47,7 +47,7 @@ public class TourGuideService {
 	boolean testMode = true;
 	private final static Long TIME21 = TimeUnit.MINUTES.toMillis(21L); // pour demander le rafraichissement au bout de 21 minutes
 	private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()*50);
-	
+	private final Map<String, User> internalUserMap = new HashMap<>();
 	
 	private static Map<UUID, FuturUtils> futurByUserId = new HashMap<>();
 	public TourGuideService(GpsUtil gpsUtil, RewardsService rewardsService) {
@@ -65,39 +65,55 @@ public class TourGuideService {
 		tracker = new Tracker(this);
 		addShutDownHook();
 	}
-/**
- * retourne une liste des récompenses par utilisateur
- * @param user
- * @return
- */
+	/**
+	 * retourne la liste des récompenses de l'utilisateur transmis en paramètre 
+	 * @param user
+	 * @return
+	 */
 	public List<UserReward> getUserRewards(User user) {
 		return user.getUserRewards();
 	}
 
-	
+	/**
+	 * retourne la position de l'utilisateur 
+	 * @param user
+	 * @return
+	 */
 	public VisitedLocation getUserLocation(User user) {
 		VisitedLocation visitedLocation = (user.getVisitedLocations().size() > 0) ? user.getLastVisitedLocation()
 				: trackUserLocation(user);
 		return visitedLocation;
 	}
-
+	/**
+	 * retourne le User a partir de son Username
+	 * @param userName
+	 * @return
+	 */
 	public User getUser(String userName) {
 		return internalUserMap.get(userName);
 	}
-
+	/**
+	 * retourne une liste de tous les Users
+	 * @return
+	 */
 	public List<User> getAllUsers() {
 		return internalUserMap.values().stream().collect(Collectors.toList());
 	}
-/**
- * ajouter un User
- * @param user
- */
+	/**
+	 * ajoute le User transmis en paramètre aux données internes de la classe 
+	 * @param user
+	 */
 	public void addUser(User user) {
 		if (!internalUserMap.containsKey(user.getUserName())) {
 			internalUserMap.put(user.getUserName(), user);
 		}
 	}
 
+	/**
+	 * Retourne une liste de fournisseurs de services avec prix dedans en fonction des préférences du User passé en paramètre
+	 * @param user
+	 * @return
+	 */
 	public List<Provider> getTripDeals(User user) {
 		int cumulatativeRewardPoints = user.getUserRewards().stream().mapToInt(i -> i.getRewardPoints()).sum();
 		List<Provider> providers = tripPricer.getPrice(tripPricerApiKey, user.getUserId(),
@@ -109,23 +125,41 @@ public class TourGuideService {
 	
 
 	
-
+	/**
+	 *  récupère les endroits visités par le user passé en paramètre, 
+	 *  ajoute le dernier endroit visité et calcule ses récompenses
+	 * @param user
+	 */
 	private void trackUserLocationCore(User user) {
         VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
         user.addToVisitedLocations(visitedLocation);
         rewardsService.calculateRewards(user);
 	}
-	
+	/**
+	 * LA MISE EN PLACE DU CONTEXTE POUR POUVOIR CALCULER EN PARALLELE PLUSIEURS UTILISATEURS(EN CAS DE MULTIPLES APPELS EXTERNES) 
+	 * @param user
+	 */
 	public void getUserLocationAsync(User user) {
 		CompletableFuture futur = CompletableFuture.runAsync(() -> trackUserLocationCore(user), executor);
 		FuturUtils futurUtils = new FuturUtils(futur);
 		futurByUserId.put(user.getUserId(), futurUtils); // je stock ici l'ID de mon user + l'heure à laquel le traitement est effectué ainsi que le traitement 
 	}
 	
+	/**
+	 * retourne le dernier endroit visité. 
+	 * En vérifiant que le calcul du dernier endroit visité est bien terminé (cf attendLaFinDuCalculGetUserLocation)
+	 * @param user
+	 * @return
+	 */
 	public VisitedLocation trackUserLocation(User user) {
 		attendLaFinDuCalculGetUserLocation(user);
         return user.getLastVisitedLocation();
 }
+	/**
+	 * permet de savoir si le calcul de GetUserLocation est en cours ou non. 
+	 * La méthode relance le calcul manuellement dans le cas ou il n'y a pas de traitement pour ce user ou que celui ci date de plus de 21 minutes
+	 * @param user
+	 */
 	private void attendLaFinDuCalculGetUserLocation(User user) {
 		FuturUtils futurUtils = futurByUserId.get(user.getUserId()); // je récupère le futur et le temps d'actualisation lié au user 
 		if(!(futurUtils != null && (Long) futurUtils.getTimeDebut()+TIME21 > System.currentTimeMillis())) {
@@ -142,6 +176,11 @@ public class TourGuideService {
 		}
 	
 	}
+	/**
+	 * retourne les 5 attractions les plus proche de l'utilisateur 
+	 * @param visitedLocation
+	 * @return
+	 */
 	public List<Attraction> getNearByAttractions(VisitedLocation visitedLocation) {
 	    List<Attraction> originalList = gpsUtil.getAttractions();
 	    // Copie locale pour éviter les effets de bord liés au multi-threading
@@ -177,7 +216,7 @@ public class TourGuideService {
 	private static final String tripPricerApiKey = "test-server-api-key";
 	// Database connection will be used for external users, but for testing purposes
 	// internal users are provided and stored in memory
-	private final Map<String, User> internalUserMap = new HashMap<>();
+	
 
 	private void initializeInternalUsers() {
 		IntStream.range(0, InternalTestHelper.getInternalUserNumber()).forEach(i -> {

@@ -110,10 +110,10 @@ public class RewardsService {
 	        }
 	    });
 	}
-/**
- *Permet de savoir si le calcul de User.getUserReward est en cours ou non. 
- * @param userId
- */
+	/**
+	 *Permet de savoir si le calcul de User.getUserReward est en cours ou non. 
+	 * @param userId
+	 */
 	public static void attendLaFinDuCalculReward(UUID userId) {
 		if(futurByUserId.containsKey(userId)) {// on cherche ce user dans la map
 			try {
