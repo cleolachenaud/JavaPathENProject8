@@ -27,11 +27,24 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         cache: maven
-    - name: import dependances GpsUtil
+    - name: installation dependances GpsUtil
       run: mvn install:install-file -Dfile=./TourGuide/libs/gpsUtil.jar -DgroupId=gpsUtil -DartifactId=gpsUtil -Dversion=1.0.0 -Dpackaging=jar
-    - name: import dependances RewardCentral
+    - name: installation dependances RewardCentral
       run: mvn install:install-file -Dfile=./TourGuide/libs/RewardCentral.jar -DgroupId=rewardCentral -DartifactId=rewardCentral -Dversion=1.0.0 -Dpackaging=jar
-    - name: import dependances TripPricer
+    - name: installation dependances TripPricer
       run: mvn install:install-file -Dfile=./TourGuide/libs/TripPricer.jar -DgroupId=tripPricer -DartifactId=tripPricer -Dversion=1.0.0 -Dpackaging=jar
-    - name: Build with Maven
-      run: mvn -B package --file TourGuide/pom.xml
+    - name: Compilation
+      run: mvn compile --file TourGuide/pom.xml
+    - name: Tests
+      run: mvn test --file TourGuide/pom.xml
+    - name: Publish test results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Maven Surefire Tests
+        path: TourGuide/target/surefire-reports/*.xml
+        reporter: junit
+    
+    - name: Package de l'application
+      run: mvn package -DskipTests --file TourGuide/pom.xml
+      
