@@ -36,15 +36,7 @@ jobs:
     - name: Compilation
       run: mvn compile --file TourGuide/pom.xml
     - name: Tests
-      run: mvn test --file TourGuide/pom.xml
-    - name: Publish test results
-      uses: dorny/test-reporter@v1
-      if: always()
-      with:
-        name: Maven Surefire Tests
-        path: TourGuide/target/surefire-reports/*.xml
-        reporter: junit
-    
+      run: mvn test --file TourGuide/pom.xml   
     - name: Package de l'application
       run: mvn package -DskipTests --file TourGuide/pom.xml
       
