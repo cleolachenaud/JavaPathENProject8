@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import org.apache.commons.lang3.time.StopWatch;
-
 import com.openclassrooms.tourguide.service.RewardsService;
 
 import gpsUtil.location.VisitedLocation;
@@ -93,7 +91,7 @@ public class User {
 	public void setUserPreferences(UserPreferences userPreferences) {
 		this.userPreferences = userPreferences;
 	}
-//TODO a voir si cette méthode ne peut pas renvoyer une exception si la liste est vide
+
 	public VisitedLocation getLastVisitedLocation() {
 		if(visitedLocations.size()==0) {
 			return null;

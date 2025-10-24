@@ -1,11 +1,5 @@
 package com.openclassrooms.tourguide.service;
 
-import com.openclassrooms.tourguide.helper.InternalTestHelper;
-import com.openclassrooms.tourguide.tracker.Tracker;
-import com.openclassrooms.tourguide.user.User;
-import com.openclassrooms.tourguide.user.UserReward;
-import com.openclassrooms.tourguide.utils.FuturUtils;
-
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -29,11 +23,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.openclassrooms.tourguide.dto.AttractionInformationDTO;
+import com.openclassrooms.tourguide.dto.NearByAttractionDTO;
+import com.openclassrooms.tourguide.helper.InternalTestHelper;
+import com.openclassrooms.tourguide.tracker.Tracker;
+import com.openclassrooms.tourguide.user.User;
+import com.openclassrooms.tourguide.user.UserReward;
+import com.openclassrooms.tourguide.utils.FuturUtils;
+
 import gpsUtil.GpsUtil;
 import gpsUtil.location.Attraction;
 import gpsUtil.location.Location;
 import gpsUtil.location.VisitedLocation;
-
+import rewardCentral.RewardCentral;
 import tripPricer.Provider;
 import tripPricer.TripPricer;
 
@@ -187,8 +189,8 @@ public class TourGuideService {
 	    ArrayList<Attraction> copieAttractions = new ArrayList<>(originalList);
         // on crée un comparateur pour comparer les attractions et ainsi pouvoir les trier 
 	    Comparator<Attraction> distanceComparator =
-	            (a1, a2) -> Double.compare(rewardsService.getDistance(a1, visitedLocation.location), 
-	            		rewardsService.getDistance(a2, visitedLocation.location));
+	            (a1, a2) -> Double.compare(RewardsService.getDistance(a1, visitedLocation.location), 
+	            		RewardsService.getDistance(a2, visitedLocation.location));
 	            // double pour éviter les erreurs d'arrondi
 
 	    // on remplie la liste des 5 attractions les plus proches de l'utilisateur 
@@ -196,9 +198,32 @@ public class TourGuideService {
 	    	    .sorted(distanceComparator) // on trie la liste du plus proche au plus lointain
 	    	    .limit(5) // dans la limite de 5 attractions
 	    	    .collect(Collectors.toList()); // qu'on insère dans la liste
-
+	   
 	    return nearbyAttractions;
 	}
+	/**
+	 * retourne les 5 attractions les plus proche de l'utilisateur 
+	 * @param visitedLocation
+	 * @return
+	 */
+	public String getNearByAttractionsAsJson(String userName) {
+    	NearByAttractionDTO nearByAttractionDTO = new NearByAttractionDTO();
+    	RewardCentral rewardCentral = new RewardCentral();
+    	User user = getUser(userName);
+    	VisitedLocation visitedLocation = this.getUserLocation(user);
+    	nearByAttractionDTO.setUserLocation(visitedLocation.location);
+    	List<AttractionInformationDTO> listAttractionInformationDTO = new ArrayList<>();
+    	for (Attraction attraction : this.getNearByAttractions(visitedLocation)) {
+    		Location attractionLocation= new Location(attraction.latitude, attraction.longitude);
+        	Integer nbPoint = rewardCentral.getAttractionRewardPoints(attraction.attractionId, user.getUserId());
+    		AttractionInformationDTO attractionInformationDTO = new AttractionInformationDTO(attraction.attractionName, attractionLocation, nbPoint, user.getLastVisitedLocation().location);
+    		listAttractionInformationDTO.add(attractionInformationDTO);
+    	}
+    	nearByAttractionDTO.setAttractionInformation(listAttractionInformationDTO);
+
+    	return nearByAttractionDTO.toJson();
+	}
+	
 
 	private void addShutDownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread() {

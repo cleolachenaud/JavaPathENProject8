@@ -11,11 +11,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -134,7 +130,7 @@ public class RewardsService {
 	 * @return
 	 */
 	public boolean isWithinAttractionProximity(Attraction attraction, Location location) {
-		return getDistance(attraction, location) > attractionProximityRange ? false : true;
+		return RewardsService.getDistance(attraction, location) > attractionProximityRange ? false : true;
 	}
 	/**
 	 * retourne VRAI si la distance entre la position de l'utilisateur et l'attraction est a moins de 10miles
@@ -143,7 +139,7 @@ public class RewardsService {
 	 * @return
 	 */
 	private boolean nearAttraction(VisitedLocation visitedLocation, Attraction attraction) {
-		return getDistance(attraction, visitedLocation.location) > proximityBuffer ? false : true;
+		return RewardsService.getDistance(attraction, visitedLocation.location) > proximityBuffer ? false : true;
 	}
 	/**
 	 * obtenir le nombre de point en fonction de la récompense
@@ -161,7 +157,7 @@ public class RewardsService {
 	 * @param loc2
 	 * @return
 	 */
-	public double getDistance(Location loc1, Location loc2) {
+	public static double getDistance(Location loc1, Location loc2) {
         double lat1 = Math.toRadians(loc1.latitude);
         double lon1 = Math.toRadians(loc1.longitude);
         double lat2 = Math.toRadians(loc2.latitude);
