@@ -202,25 +202,40 @@ public class TourGuideService {
 	    return nearbyAttractions;
 	}
 	/**
-	 * retourne les 5 attractions les plus proche de l'utilisateur 
+	 * retourne les 5 attractions les plus proche de l'utilisateur pour le format Json
 	 * @param visitedLocation
 	 * @return
 	 */
 	public String getNearByAttractionsAsJson(String userName) {
+		// on créee un objet qui contiendra la position de l'utilisateur et les attractions proches de lui
     	NearByAttractionDTO nearByAttractionDTO = new NearByAttractionDTO();
+    	// on créee une variable qui permettra de récupérer le nombre de points de récompense par attraction
     	RewardCentral rewardCentral = new RewardCentral();
+    	// on récupère le User grace à son Username
     	User user = getUser(userName);
+    	// on récupère la position actuelle de l'utilisateur
     	VisitedLocation visitedLocation = this.getUserLocation(user);
+    	// on insère la position de l'utilisateur dans le nearByAttractionDTO
     	nearByAttractionDTO.setUserLocation(visitedLocation.location);
+    	// on créee une liste vide d'attractionInformationDTO pour la remplir avec les attractions proches de l'utilisateur 
     	List<AttractionInformationDTO> listAttractionInformationDTO = new ArrayList<>();
+    	// Pour chaque attraction retournée par getnearByAttraction
+    	// (getNearByAttraction nous renvoie les 5 plus proche de l'utilisateur) 
     	for (Attraction attraction : this.getNearByAttractions(visitedLocation)) {
+    		// on récupère la localisation (latitude longitude) de l'attraction en cours
     		Location attractionLocation= new Location(attraction.latitude, attraction.longitude);
+    		// on récupère le nombre de points de l'attraction
         	Integer nbPoint = rewardCentral.getAttractionRewardPoints(attraction.attractionId, user.getUserId());
+        	// on créee l'attractionInformationDTO qui contient le nom de l'attraction, sa localisation, le nb de points associé, et la position de l'utilisateur)
     		AttractionInformationDTO attractionInformationDTO = new AttractionInformationDTO(attraction.attractionName, attractionLocation, nbPoint, user.getLastVisitedLocation().location);
+    		// on ajoute l'attractionInformationDTO à la liste
     		listAttractionInformationDTO.add(attractionInformationDTO);
     	}
+    	// on set la liste des 5 attractions les plus proches de l'utilisateur 
+    	//(comportant le nom de l'attraction, sa localisation, le nb de point, la position de l'utilisateur)
+    	// dans l'objet nearByAttractionDTO
     	nearByAttractionDTO.setAttractionInformation(listAttractionInformationDTO);
-
+    	// on transcrit l'objet en Json grace à la méthode "toJson"
     	return nearByAttractionDTO.toJson();
 	}
 	
@@ -232,7 +247,7 @@ public class TourGuideService {
 			}
 		});
 	}
-//TODO repasser ça dans des tests c'est pas possible 
+
 	/**********************************************************************************
 	 * 
 	 * Methods Below: For Internal Testing

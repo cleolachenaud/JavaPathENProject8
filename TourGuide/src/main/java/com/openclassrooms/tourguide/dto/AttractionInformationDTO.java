@@ -10,7 +10,13 @@ public class AttractionInformationDTO {
 	private double distanceUserAttraction;
 	private Integer nbPoints;
 	
-	
+	/**
+	 * classe qui permet de récupérer une AttractionInformation qui comporte le nom de l'attraction, la localisation, le nombre de points et la localisation de l'utilisateur 
+	 * @param attractionName
+	 * @param attractionLocation
+	 * @param nbPoints
+	 * @param currentUserLocation
+	 */
 	public AttractionInformationDTO(String attractionName, Location attractionLocation, Integer nbPoints, Location currentUserLocation) {
 		super();
 		this.attractionName = attractionName;
